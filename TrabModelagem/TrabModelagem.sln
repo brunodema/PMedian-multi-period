@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30330.147
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InstanceGenerator", "TrabModelagem\InstanceGenerator.csproj", "{FCAC3F38-E530-4AC3-9F69-2AB0A192996D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PMedians", "PMedians\PMedians.csproj", "{FB13EDF2-8D22-4CB1-B638-2E5B70FED338}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FCAC3F38-E530-4AC3-9F69-2AB0A192996D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FCAC3F38-E530-4AC3-9F69-2AB0A192996D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FCAC3F38-E530-4AC3-9F69-2AB0A192996D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FCAC3F38-E530-4AC3-9F69-2AB0A192996D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FB13EDF2-8D22-4CB1-B638-2E5B70FED338}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FB13EDF2-8D22-4CB1-B638-2E5B70FED338}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FB13EDF2-8D22-4CB1-B638-2E5B70FED338}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FB13EDF2-8D22-4CB1-B638-2E5B70FED338}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {F48A06A0-C563-4CFF-9E42-E745EB2E6B28}
+	EndGlobalSection
+EndGlobal
