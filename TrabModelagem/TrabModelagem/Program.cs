@@ -3,6 +3,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Drawing;
 using System.Dynamic;
+using System.Collections.Generic;
+using System.Runtime.CompilerServices;
+using System.Windows.Forms.VisualStyles;
 
 namespace InstanceGenerator
 {
@@ -141,16 +144,105 @@ namespace InstanceGenerator
 
         public void draw_instance(String filename)
         {
-            // to do
-            Point[] Depots = new Point[instanceGeneratorConfig.n_depots];
-            for (int i = 0; i < instanceGeneratorConfig.n_depots; i++)
+            //
+
+        }
+    }
+
+    public static class ColorProgression
+    {
+        private static int current_index = 1;
+
+        private static Dictionary<int, Color> CurrentColor = new Dictionary<int, Color>
+        {
+            { 1, Color.Black},
+            { 2, Color.Red}
+        };
+
+        public static void nextColor()
+        {
+            ++current_index;
+        }
+
+        public static Color getColor()
+        {
+            return CurrentColor[current_index];
+        }
+    }
+
+    public class DrawingSettings
+    {
+        public int point_radius { get; set; } = 3;
+        public double board_radius_factor { get; set; } = 1.1;
+    }
+
+    public class InstanceDrawing
+    {
+        private readonly InstanceGenerator instanceGenerator;
+        private readonly DrawingSettings drawingSettings;
+
+        private Rectangle[] depot;
+        private Rectangle[] node;
+        private Image image;
+        private Graphics graphics;
+        private Brush brush;
+        private Pen pen;
+        private Rectangle board;
+
+        public InstanceDrawing(InstanceGenerator pinstanceGenerator, DrawingSettings pdrawingSettings)
+        {
+            this.instanceGenerator = pinstanceGenerator;
+            this.drawingSettings = pdrawingSettings;
+
+            this.image = new Bitmap((int)(instanceGenerator.getInstanceConfig().x_dim * drawingSettings.board_radius_factor), (int)(instanceGenerator.getInstanceConfig().y_dim * drawingSettings.board_radius_factor));
+            Color color = ColorProgression.getColor();
+            this.pen = new Pen(color);
+            this.brush = new SolidBrush(color);
+            this.graphics = Graphics.FromImage(this.image);
+        }
+
+        public void draw_instance()
+        {
+            this.initialize_node_drawings();
+            this.draw_board();
+            this.draw_nodes();
+
+            string filename = "instance.bmp";
+            this.image.Save(filename);
+            Process.Start(filename);
+        }
+
+        private void initialize_node_drawings()
+        {
+            depot = new Rectangle[instanceGenerator.getInstanceConfig().n_depots];
+            for (int i = 0; i < instanceGenerator.getInstanceConfig().n_depots; i++)
             {
-                Depots[i] = new Point(depot_node[i].x, depot_node[i].y);
+                depot[i] = new Rectangle(instanceGenerator.depot_node[i].x - drawingSettings.point_radius / 2, instanceGenerator.depot_node[i].y - drawingSettings.point_radius / 2, drawingSettings.point_radius, drawingSettings.point_radius);
             }
-            Point[] Nodes = new Point[instanceGeneratorConfig.n_nodes];
-            for (int i = 0; i < instanceGeneratorConfig.n_nodes; i++)
+            node = new Rectangle[instanceGenerator.getInstanceConfig().n_nodes];
+            for (int i = 0; i < instanceGenerator.getInstanceConfig().n_nodes; i++)
             {
-                Nodes[i] = new Point(customer_node[i].x, customer_node[i].y);
+                node[i] = new Rectangle(instanceGenerator.customer_node[i].x, instanceGenerator.customer_node[i].y, drawingSettings.point_radius, drawingSettings.point_radius);
+            }
+        }
+
+        private void draw_board()
+        {
+            board = new Rectangle(0, 0, (int)(instanceGenerator.getInstanceConfig().x_dim * (drawingSettings.board_radius_factor - 0.05)), (int)(instanceGenerator.getInstanceConfig().y_dim * (drawingSettings.board_radius_factor - 0.05)));
+            this.graphics.DrawRectangle(this.pen, board);
+        }
+
+        private void draw_nodes()
+        {
+            foreach (var dnode in depot)
+            {
+                this.graphics.FillRectangle(brush, dnode);
+            }
+            ColorProgression.nextColor();
+            this.brush = new SolidBrush(ColorProgression.getColor());
+            foreach (var nnode in node)
+            {
+                this.graphics.FillRectangle(brush, nnode);
             }
         }
     }
@@ -162,6 +254,8 @@ namespace InstanceGenerator
             InstanceGeneratorConfig instanceGeneratorConfig = new InstanceGeneratorConfig();
             InstanceGenerator IG = new InstanceGenerator(instanceGeneratorConfig);
             IG.create_instance();
+            InstanceDrawing instanceDrawing = new InstanceDrawing(IG, new DrawingSettings());
+            instanceDrawing.draw_instance();
             return;
         }
     }
