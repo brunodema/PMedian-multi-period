@@ -17,12 +17,12 @@ namespace InstanceGenerator
 
     public class InstanceGeneratorConfig
     {
-        public int time_periods { get; set; } = 5;
-        public int max_depot_nodes_per_period { get; set; } = 3;
+        public int time_periods { get; set; } = 10;
+        public int max_depot_nodes_per_period { get; set; } = 20;
         public int max_nodes_per_depot { get; set; } = 100;
-        public double depot_usage_cost { get; set; } = 500;
-        public int n_depots { get; set; } = 10;
-        public int n_nodes { get; set; } = 100;
+        public double depot_usage_cost { get; set; } = 10000;
+        public int n_depots { get; set; } = 20;
+        public int n_nodes { get; set; } = 1000;
         public int x_dim { get; set; } = 400;
         public int y_dim { get; set; } = 400;
         public int depot_creation_radius { get; set; } = 50;
@@ -144,29 +144,32 @@ namespace InstanceGenerator
 
         public void draw_instance(String filename)
         {
-            //
-
+            InstanceDrawing instanceDrawing = new InstanceDrawing(this, new DrawingSettings());
+            instanceDrawing.draw(filename);
         }
+    }
+
+    public enum OBJECT_COLOR
+    {
+        NEUTRAL_BLACK,
+        DEPOT_NODE,
+        CUSTOMER_NODE,
+        ARROW_LINK
     }
 
     public static class ColorProgression
     {
-        private static int current_index = 1;
-
-        private static Dictionary<int, Color> CurrentColor = new Dictionary<int, Color>
+        private static Dictionary<OBJECT_COLOR, Color> CurrentColor = new Dictionary<OBJECT_COLOR, Color>
         {
-            { 1, Color.Black},
-            { 2, Color.Red}
+            { OBJECT_COLOR.NEUTRAL_BLACK, Color.Black},
+            { OBJECT_COLOR.DEPOT_NODE, Color.Black},
+            { OBJECT_COLOR.CUSTOMER_NODE, Color.Red},
+            { OBJECT_COLOR.ARROW_LINK, Color.LightBlue }
         };
 
-        public static void nextColor()
+        public static Color getColor(OBJECT_COLOR object_type)
         {
-            ++current_index;
-        }
-
-        public static Color getColor()
-        {
-            return CurrentColor[current_index];
+            return CurrentColor[object_type];
         }
     }
 
@@ -195,21 +198,29 @@ namespace InstanceGenerator
             this.drawingSettings = pdrawingSettings;
 
             this.image = new Bitmap((int)(instanceGenerator.getInstanceConfig().x_dim * drawingSettings.board_radius_factor), (int)(instanceGenerator.getInstanceConfig().y_dim * drawingSettings.board_radius_factor));
-            Color color = ColorProgression.getColor();
+            Color color = ColorProgression.getColor(OBJECT_COLOR.NEUTRAL_BLACK);
             this.pen = new Pen(color);
             this.brush = new SolidBrush(color);
             this.graphics = Graphics.FromImage(this.image);
         }
 
-        public void draw_instance()
+        public Image getImage()
+        {
+            return this.image;
+        }
+
+        public DrawingSettings getDrawingSettings()
+        {
+            return this.drawingSettings;
+        }
+
+        public void draw(string filename)
         {
             this.initialize_node_drawings();
             this.draw_board();
             this.draw_nodes();
 
-            string filename = "instance.bmp";
             this.image.Save(filename);
-            Process.Start(filename);
         }
 
         private void initialize_node_drawings()
@@ -238,8 +249,7 @@ namespace InstanceGenerator
             {
                 this.graphics.FillRectangle(brush, dnode);
             }
-            ColorProgression.nextColor();
-            this.brush = new SolidBrush(ColorProgression.getColor());
+            this.brush = new SolidBrush(ColorProgression.getColor(OBJECT_COLOR.CUSTOMER_NODE));
             foreach (var nnode in node)
             {
                 this.graphics.FillRectangle(brush, nnode);
@@ -255,7 +265,7 @@ namespace InstanceGenerator
             InstanceGenerator IG = new InstanceGenerator(instanceGeneratorConfig);
             IG.create_instance();
             InstanceDrawing instanceDrawing = new InstanceDrawing(IG, new DrawingSettings());
-            instanceDrawing.draw_instance();
+            instanceDrawing.draw("instance");
             return;
         }
     }

@@ -4,12 +4,16 @@ using System.Globalization;
 using System.IO.Enumeration;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography.X509Certificates;
 using Gurobi;
 using InstanceGenerator;
+using System.Drawing;
+using System.Diagnostics;
+using System.IO;
 
 namespace PMedians
 {
-    class VariableGenerator
+    public class VariableGenerator
     {
         private readonly InstanceGenerator.InstanceGenerator InstData;
         private Gurobi.GRBModel Model;
@@ -56,7 +60,7 @@ namespace PMedians
         }
     }
 
-    class ConstraintGenerator
+    public class ConstraintGenerator
     {
         private GRBModel Model;
         private readonly VariableGenerator variableGenerator;
@@ -161,39 +165,35 @@ namespace PMedians
         // to do
     }
 
-    class PMedian
+    public class PMedian : GRBModel
     {
         private readonly InstanceGenerator.InstanceGenerator Instance;
-        private Gurobi.GRBEnv env;
-        private Gurobi.GRBModel Model;
+        private VariableGenerator variableGenerator;
+        private ConstraintGenerator constraintGenerator;
         private string filename;
 
         public PMedian(InstanceGenerator.InstanceGenerator pInstance, string pfilename = "PMEDIAN.log")
+            : base(new GRBEnv(pfilename))
         {
             Instance = pInstance;
             filename = pfilename;
         }
 
-        private void setup_env()
+        public InstanceGenerator.InstanceGenerator getInstanceGenerator()
         {
-            env = new GRBEnv(filename);
-        }
-        private void setup_model()
-        {
-            Model = new GRBModel(env);
+            return this.Instance;
         }
 
-        public void setup(string filename = "")
+        public VariableGenerator getVariableGenerator()
         {
-            this.setup_env();
-            this.setup_model();
+            return this.variableGenerator;
         }
 
         public void setup_problem()
         {
-            VariableGenerator variableGenerator = new VariableGenerator(Instance, Model);
+            variableGenerator = new VariableGenerator(Instance, this);
             variableGenerator.make_all_vars();
-            ConstraintGenerator constraintGenerator = new ConstraintGenerator(Model, variableGenerator, Instance);
+            constraintGenerator = new ConstraintGenerator(this, variableGenerator, Instance);
             constraintGenerator.make_all_constraints();
         }
 
@@ -201,10 +201,11 @@ namespace PMedians
         {
             // to do
         }
+
         public int solve_instance()
         {
-            this.Model.Optimize();
-            if (this.Model.Status == GRB.Status.INFEASIBLE)
+            this.Optimize();
+            if (this.Status == GRB.Status.INFEASIBLE)
             {
                 this.IIS();
             }
@@ -213,18 +214,18 @@ namespace PMedians
 
         private void IIS()
         {
-            this.Model.ComputeIIS();
-            this.Model.Write("Infeasible.ilp");
+            this.ComputeIIS();
+            this.Write("Infeasible.ilp");
         }
 
         public void write_lp()
         {
-            this.Model.Write(filename + ".lp");
+            this.Write(filename + ".lp");
         }
 
         public void write_sol()
         {
-            this.Model.Write(filename + ".sol");
+            this.Write(filename + ".sol");
         }
 
         public void publish_model()
@@ -233,25 +234,116 @@ namespace PMedians
             this.write_sol();
         }
 
-        public void draw_solution()
+        public void draw_solution(InstanceDrawing instanceDrawing, string filename_template)
         {
-            // to do
+            SolutionDrawing solutionDrawing = new SolutionDrawing(instanceDrawing, this);
+            solutionDrawing.draw(filename_template);
         }
     }
 
+    public class SolutionDrawing
+    {
+        private readonly InstanceDrawing instanceDrawing;
+        private readonly PMedian pMedian;
 
-    class main
+        private Pen pen;
+
+        private Graphics[] graphics;
+        private Image[] image;
+
+        public SolutionDrawing(InstanceDrawing pinstanceDrawing, PMedian pPMedian)
+        {
+            instanceDrawing = pinstanceDrawing;
+            pMedian = pPMedian;
+
+            pen = new Pen(ColorProgression.getColor(OBJECT_COLOR.ARROW_LINK));
+            this.graphics = new Graphics[this.pMedian.getInstanceGenerator().getInstanceConfig().time_periods];
+            this.image = new Image[this.pMedian.getInstanceGenerator().getInstanceConfig().time_periods];
+
+            for (int t = 0; t < pMedian.getInstanceGenerator().getInstanceConfig().time_periods; t++)
+            {
+                //this.image[t] = new Bitmap((int)(pMedian.getInstanceGenerator().getInstanceConfig().x_dim * instanceDrawing.getDrawingSettings().board_radius_factor), (int)(pMedian.getInstanceGenerator().getInstanceConfig().y_dim * instanceDrawing.getDrawingSettings().board_radius_factor));
+                this.image[t] = (Image)this.instanceDrawing.getImage().Clone();
+                this.graphics[t] = Graphics.FromImage(this.image[t]);
+            }
+        }
+
+        public void draw(string filename_template)
+        {
+            this.draw_node_designations();
+            this.draw_solution_all_periods(filename_template);
+        }
+
+        private void draw_solution_all_periods(string filename_template)
+        {
+            for (int t = 0; t < this.pMedian.getInstanceGenerator().getInstanceConfig().time_periods; t++)
+            {
+                this.image[t].Save(filename_template + "_" + t + ".bmp");
+            }
+        }
+
+        private void draw_instance(string filename)
+        {
+            this.instanceDrawing.draw(filename);
+        }
+
+        private void draw_node_designations()
+        {
+            for (int t = 0; t < pMedian.getInstanceGenerator().getInstanceConfig().time_periods; t++)
+            {
+                for (int j = 0; j < pMedian.getInstanceGenerator().getInstanceConfig().n_depots; j++)
+                {
+                    Point dnode_point = new Point(pMedian.getInstanceGenerator().depot_node[j].x, pMedian.getInstanceGenerator().depot_node[j].y);
+                    for (int i = 0; i < pMedian.getInstanceGenerator().getInstanceConfig().n_nodes; i++)
+                    {
+                        if (pMedian.getVariableGenerator().customer_depot_designation[i, j, t].X > 0.5)
+                        {
+                            this.graphics[t].DrawLine(this.pen, new Point(pMedian.getInstanceGenerator().customer_node[i].x, pMedian.getInstanceGenerator().customer_node[i].y), dnode_point);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    /// <summary>
+    /// Class to clump auxiliary methods for the P-Medians model execution.
+    /// </summary>
+    public static class PMedianController
+    {
+        /// <summary>
+        /// Delete files with the given terminations.
+        /// </summary>
+        /// <param name="args">
+        /// List of strings containing the terminations. Example: "'.bmp','.lp','.sol'"
+        /// </param>
+        public static void folder_cleanup(params string[] args)
+        {
+            foreach (var arg in args)
+            {
+                foreach (string file in Directory.GetFiles(".", "*" + arg))
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+    }
+
+    static class main
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Hello World!");
+            PMedianController.folder_cleanup(".bmp", ".lp", ".sol");
+
             InstanceGenerator.InstanceGenerator instanceGenerator = new InstanceGenerator.InstanceGenerator(new InstanceGeneratorConfig());
             instanceGenerator.create_instance();
+            InstanceDrawing instanceDrawing = new InstanceDrawing(instanceGenerator, new DrawingSettings());
+            instanceDrawing.draw("instance.bmp");
             PMedian pMedianProblem = new PMedian(instanceGenerator, "PMedian.log");
-            pMedianProblem.setup();
             pMedianProblem.setup_problem();
             pMedianProblem.solve_instance();
             pMedianProblem.publish_model();
+            pMedianProblem.draw_solution(instanceDrawing, "solution");
+
         }
     }
 }
