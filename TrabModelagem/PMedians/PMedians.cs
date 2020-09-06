@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Collections.Generic;
 using InstanceGenerator;
+using System.Threading;
 
 namespace PMedians
 {
@@ -203,9 +204,9 @@ namespace PMedians
             // to do
         }
 
-        public int solve_instance()
+        public int solve_instance(double runtime)
         {
-            this.Set(GRB.DoubleParam.TimeLimit, 3600); // mudar isso
+            this.Set(GRB.DoubleParam.TimeLimit, runtime);
             this.Optimize();
             if (this.Status == GRB.Status.INFEASIBLE)
             {
@@ -217,7 +218,7 @@ namespace PMedians
         private void IIS()
         {
             this.ComputeIIS();
-            this.Write("Infeasible.ilp");
+            this.Write(filename + "ilp");
         }
 
         public void write_lp()
@@ -336,6 +337,7 @@ namespace PMedians
         private static int curr_pos = 0;
         private static InstanceGeneratorConfig instanceGeneratorConfig;
         private static string drawing_path;
+        private static double model_runtime = 7200.00;
 
         public static InstanceGeneratorConfig getInstanceGeneratorConfig()
         {
@@ -352,6 +354,11 @@ namespace PMedians
         public static string getDrawingPath()
         {
             return drawing_path;
+        }
+
+        public static double getModelRuntime()
+        {
+            return model_runtime;
         }
 
         public static bool parse_args(string[] p_args)
@@ -419,6 +426,18 @@ namespace PMedians
                         if (is_config_set)
                         {
                             set_drawing_options();
+                            ++curr_pos;
+                        }
+                        else
+                        {
+                            end(1, "Error when parsing optional arguments: no instance configuration detected. Please refer to the usage instructions (-help).");
+                        }
+                        break;
+
+                    case "-runtime":
+                        if (is_config_set)
+                        {
+                            set_model_runtime();
                             ++curr_pos;
                         }
                         else
@@ -521,10 +540,10 @@ namespace PMedians
                     }
                     else
                     {
-                        --curr_pos;
                         break;
                     }
                 }
+                --curr_pos;
                 if (values.Count != 9)
                 {
                     end(1, String.Format("Error when parsing values: 9 values expected, only {0} detected.", values.Count));
@@ -566,7 +585,6 @@ namespace PMedians
 
         private static InstanceGeneratorConfig instance_from_default()
         {
-            ++curr_pos;
             Console.Write("Default instance parameters request (-dflt) detected. Starting instance with:\n" +
     $"time periods = {CONSTANTS.TIME_PERIODS}\n" +
     $"max operating depots per periods = {CONSTANTS.MAX_DEPOTS_NODES_PER_PERIOD}\n" +
@@ -591,7 +609,7 @@ namespace PMedians
                     end(1, "Error when setting RNG seed: instance parameters weren't correctly provided, therefore there's no instance to set the seed value.");
                 }
                 int seed_number = Convert.ToInt32(args[curr_pos]);
-                Console.WriteLine(String.Format("Manual seed input detected (-rng). Setting seed with {0}", seed_number));
+                Console.WriteLine(String.Format("Manual seed input detected (-rng). Setting seed to {0}", seed_number));
                 instanceGeneratorConfig.RNG = new Random(seed_number);
             }
             catch (Exception e)
@@ -608,6 +626,22 @@ namespace PMedians
             {
                 Directory.CreateDirectory(args[curr_pos]);
                 drawing_path = args[curr_pos] + "\\";
+                Console.WriteLine($"Setting drawing directory to '{drawing_path}'...");
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.Message);
+                end(1);
+            }
+        }
+
+        private static void set_model_runtime()
+        {
+            ++curr_pos;
+            try
+            {
+                model_runtime = Convert.ToDouble(args[curr_pos]);
+                Console.WriteLine($"Setting model time limit to: {model_runtime}s");
             }
             catch (Exception e)
             {
@@ -662,10 +696,10 @@ namespace PMedians
 
                     PMedian pMedianProblem = new PMedian(instanceGenerator, ArgParser.getDrawingPath() + "PMEDIAN");
                     pMedianProblem.setup_problem();
-                    pMedianProblem.solve_instance();
+                    pMedianProblem.solve_instance(ArgParser.getModelRuntime());
                     pMedianProblem.publish_model();
 
-                    if (ArgParser.getDrawingPath() != "")
+                    if (ArgParser.getDrawingPath() != null)
                     {
                         InstanceDrawing instanceDrawing = new InstanceDrawing(instanceGenerator, new DrawingSettings());
                         instanceDrawing.draw(ArgParser.getDrawingPath() + "instance");
@@ -684,7 +718,7 @@ namespace PMedians
                     instanceDrawing.draw("instance");
                     PMedian pMedianProblem = new PMedian(instanceGenerator, "PMedian");
                     pMedianProblem.setup_problem();
-                    pMedianProblem.solve_instance();
+                    pMedianProblem.solve_instance(7200);
                     pMedianProblem.publish_model();
                     pMedianProblem.draw_solution(instanceDrawing, "solution");
 

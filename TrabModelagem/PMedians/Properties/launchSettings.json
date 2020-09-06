@@ -2,7 +2,7 @@
   "profiles": {
     "PMedians": {
       "commandName": "Project",
-      "commandLineArgs": "-val 3 10 100 5000 10 1000 50 1000 1000 -rng 105412 -draw 'problem1' "
+      "commandLineArgs": "-val 3 10 100 5000 10 1000 100 1000 1000 -rng 308259 -runtime 1000"
     }
   }
 }
