@@ -337,7 +337,7 @@ namespace PMedians
         private static int curr_pos = 0;
         private static InstanceGeneratorConfig instanceGeneratorConfig;
         private static string drawing_path;
-        private static double model_runtime = 7200.00;
+        private static double model_runtime = Double.MaxValue;
 
         public static InstanceGeneratorConfig getInstanceGeneratorConfig()
         {
