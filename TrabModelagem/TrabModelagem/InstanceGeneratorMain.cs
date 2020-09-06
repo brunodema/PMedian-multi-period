@@ -6,6 +6,7 @@ using System.Dynamic;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Windows.Forms.VisualStyles;
+using System.Windows.Forms;
 
 namespace InstanceGenerator
 {
@@ -15,21 +16,35 @@ namespace InstanceGenerator
         public int y = 0;
     }
 
-    public class InstanceGeneratorConfig
+    public class CONSTANTS
     {
-        public int time_periods { get; set; } = 10;
-        public int max_depot_nodes_per_period { get; set; } = 20;
-        public int max_nodes_per_depot { get; set; } = 100;
-        public double depot_usage_cost { get; set; } = 10000;
-        public int n_depots { get; set; } = 20;
-        public int n_nodes { get; set; } = 1000;
-        public int x_dim { get; set; } = 400;
-        public int y_dim { get; set; } = 400;
-        public int depot_creation_radius { get; set; } = 50;
-        public Random RNG { get; set; } = new Random(1000);
+        public const int TIME_PERIODS = 3;
+        public const int MAX_DEPOTS_NODES_PER_PERIOD = 10;
+        public const int MAX_NODES_PER_DEPOT = 100;
+        public const double DEPOT_USAGE_COST = 1000;
+        public const int N_DEPOTS = 10;
+        public const int N_NODES = 1000;
+        public const int X_DIM = 1000;
+        public const int Y_DIM = 1000;
+        public const int DEPOT_CREATION_RADIUS = 100;
+        public const int RNG_SEED = 1000;
     }
 
-    public class InstanceGenerator
+    public class InstanceGeneratorConfig
+    {
+        public int time_periods { get; set; } = CONSTANTS.TIME_PERIODS;
+        public int max_depot_nodes_per_period { get; set; } = CONSTANTS.MAX_DEPOTS_NODES_PER_PERIOD;
+        public int max_nodes_per_depot { get; set; } = CONSTANTS.MAX_NODES_PER_DEPOT;
+        public double depot_usage_cost { get; set; } = CONSTANTS.DEPOT_USAGE_COST;
+        public int n_depots { get; set; } = CONSTANTS.N_DEPOTS;
+        public int n_nodes { get; set; } = CONSTANTS.N_NODES;
+        public int x_dim { get; set; } = CONSTANTS.X_DIM;
+        public int y_dim { get; set; } = CONSTANTS.Y_DIM;
+        public int depot_creation_radius { get; set; } = CONSTANTS.DEPOT_CREATION_RADIUS;
+        public Random RNG { get; set; } = new Random(CONSTANTS.RNG_SEED);
+    }
+
+    public class InstanceGeneratorMain
     {
         private readonly InstanceGeneratorConfig instanceGeneratorConfig;
 
@@ -44,7 +59,7 @@ namespace InstanceGenerator
         public double[,] customer_depot_assignment_cost { get; set; }
         public double[] depot_usage_cost { get; set; }
 
-        public InstanceGenerator(InstanceGeneratorConfig pinstanceGeneratorConfig)
+        public InstanceGeneratorMain(InstanceGeneratorConfig pinstanceGeneratorConfig)
         {
             instanceGeneratorConfig = pinstanceGeneratorConfig;
         }
@@ -181,7 +196,7 @@ namespace InstanceGenerator
 
     public class InstanceDrawing
     {
-        private readonly InstanceGenerator instanceGenerator;
+        private readonly InstanceGeneratorMain instanceGenerator;
         private readonly DrawingSettings drawingSettings;
 
         private Rectangle[] depot;
@@ -192,7 +207,7 @@ namespace InstanceGenerator
         private Pen pen;
         private Rectangle board;
 
-        public InstanceDrawing(InstanceGenerator pinstanceGenerator, DrawingSettings pdrawingSettings)
+        public InstanceDrawing(InstanceGeneratorMain pinstanceGenerator, DrawingSettings pdrawingSettings)
         {
             this.instanceGenerator = pinstanceGenerator;
             this.drawingSettings = pdrawingSettings;
@@ -220,7 +235,7 @@ namespace InstanceGenerator
             this.draw_board();
             this.draw_nodes();
 
-            this.image.Save(filename);
+            this.image.Save(filename + ".bmp");
         }
 
         private void initialize_node_drawings()
@@ -257,12 +272,12 @@ namespace InstanceGenerator
         }
     }
 
-    class main
+     class main
     {
         static void Main(string[] args)
         {
             InstanceGeneratorConfig instanceGeneratorConfig = new InstanceGeneratorConfig();
-            InstanceGenerator IG = new InstanceGenerator(instanceGeneratorConfig);
+            InstanceGeneratorMain IG = new InstanceGeneratorMain(instanceGeneratorConfig);
             IG.create_instance();
             InstanceDrawing instanceDrawing = new InstanceDrawing(IG, new DrawingSettings());
             instanceDrawing.draw("instance");

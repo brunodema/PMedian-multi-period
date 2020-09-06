@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.30330.147
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "InstanceGenerator", "TrabModelagem\InstanceGenerator.csproj", "{FCAC3F38-E530-4AC3-9F69-2AB0A192996D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PMedians", "PMedians\PMedians.csproj", "{FB13EDF2-8D22-4CB1-B638-2E5B70FED338}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PMedians", "PMedians\PMedians.csproj", "{FB13EDF2-8D22-4CB1-B638-2E5B70FED338}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
