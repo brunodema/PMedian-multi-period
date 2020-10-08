@@ -440,6 +440,11 @@ namespace PMedians
             }
         }
 
+        public static void getHelp()
+        {
+            help();
+        }
+
         public static string getDrawingPath()
         {
             return drawing_path;
@@ -795,53 +800,51 @@ namespace PMedians
         {
             try
             {
-                if (args.Length > 1)
+                ArgParser.parse_args(args);
+
+                InstanceGeneratorConfig instanceGeneratorConfig = ArgParser.getInstanceGeneratorConfig();
+                InstanceGeneratorMain instanceGenerator = new InstanceGenerator.InstanceGeneratorMain(instanceGeneratorConfig);
+                instanceGenerator.create_instance();
+
+                PMedian pMedianProblem = new PMedian(instanceGenerator, ArgParser.getDrawingPath() + "PMEDIAN");
+                pMedianProblem.setup_problem();
+                pMedianProblem.solve_instance(ArgParser.getModelRuntime());
+                pMedianProblem.publish_model();
+
+                if (ArgParser.getDrawingPath() != null)
                 {
-                    ArgParser.parse_args(args);
-
-                    InstanceGeneratorConfig instanceGeneratorConfig = ArgParser.getInstanceGeneratorConfig();
-                    InstanceGeneratorMain instanceGenerator = new InstanceGenerator.InstanceGeneratorMain(instanceGeneratorConfig);
-                    instanceGenerator.create_instance();
-
-                    PMedian pMedianProblem = new PMedian(instanceGenerator, ArgParser.getDrawingPath() + "PMEDIAN");
-                    pMedianProblem.setup_problem();
-                    pMedianProblem.solve_instance(ArgParser.getModelRuntime());
-                    pMedianProblem.publish_model();
-
-                    if (ArgParser.getDrawingPath() != null)
-                    {
-                        InstanceDrawing instanceDrawing = new InstanceDrawing(instanceGenerator, new DrawingSettings());
-                        instanceDrawing.draw(ArgParser.getDrawingPath() + "instance");
-                        pMedianProblem.draw_solution(instanceDrawing, ArgParser.getDrawingPath() + "solution");
-                    }
-
-                    if (ArgParser.results_filename != null)
-                    {
-                        pMedianProblem.write_results_to_file(ArgParser.results_filename);
-                    }
-
-                    return 0;
-                }
-                else
-                {
-                    PMedianController.folder_cleanup(".bmp", ".lp", ".sol");
-
-                    InstanceGenerator.InstanceGeneratorMain instanceGenerator = new InstanceGenerator.InstanceGeneratorMain(new InstanceGeneratorConfig());
-                    instanceGenerator.create_instance();
                     InstanceDrawing instanceDrawing = new InstanceDrawing(instanceGenerator, new DrawingSettings());
-                    instanceDrawing.draw("instance");
-                    PMedian pMedianProblem = new PMedian(instanceGenerator, "PMedian");
-                    pMedianProblem.setup_problem();
-                    pMedianProblem.solve_instance(7200);
-                    pMedianProblem.publish_model();
-                    pMedianProblem.draw_solution(instanceDrawing, "solution");
-
-                    return 0;
+                    instanceDrawing.draw(ArgParser.getDrawingPath() + "instance");
+                    pMedianProblem.draw_solution(instanceDrawing, ArgParser.getDrawingPath() + "solution");
                 }
+
+                if (ArgParser.results_filename != null)
+                {
+                    pMedianProblem.write_results_to_file(ArgParser.results_filename);
+                }
+
+                return 0;
+                //else
+                //{
+                //    PMedianController.folder_cleanup(".bmp", ".lp", ".sol");
+
+                //    InstanceGenerator.InstanceGeneratorMain instanceGenerator = new InstanceGenerator.InstanceGeneratorMain(new InstanceGeneratorConfig());
+                //    instanceGenerator.create_instance();
+                //    InstanceDrawing instanceDrawing = new InstanceDrawing(instanceGenerator, new DrawingSettings());
+                //    instanceDrawing.draw("instance");
+                //    PMedian pMedianProblem = new PMedian(instanceGenerator, "PMedian");
+                //    pMedianProblem.setup_problem();
+                //    pMedianProblem.solve_instance(7200);
+                //    pMedianProblem.publish_model();
+                //    pMedianProblem.draw_solution(instanceDrawing, "solution");
+
+                //    return 0;
+                //}
             }
             catch (Exception e)
             {
                 Console.WriteLine(e.Message);
+                ArgParser.getHelp();
                 return 1;
             }
         }
