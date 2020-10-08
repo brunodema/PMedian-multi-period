@@ -1,17 +1,11 @@
-﻿using System;
-using System.CodeDom.Compiler;
-using System.Globalization;
-using System.IO.Enumeration;
-using System.Linq;
-using System.Reflection;
-using System.Security.Cryptography.X509Certificates;
-using Gurobi;
-using System.Drawing;
-using System.Diagnostics;
-using System.IO;
-using System.Collections.Generic;
+﻿using Gurobi;
 using InstanceGenerator;
-using System.Threading;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace PMedians
 {
@@ -21,6 +15,7 @@ namespace PMedians
         private Gurobi.GRBModel Model;
         public GRBVar[,] depot_usage;
         public GRBVar[,,] customer_depot_designation;
+        public GRBVar[,] group_is_serviced;
 
         public VariableGenerator(InstanceGenerator.InstanceGeneratorMain pInstData, Gurobi.GRBModel pModel)
         {
@@ -28,6 +23,7 @@ namespace PMedians
             Model = pModel;
             depot_usage = new GRBVar[InstData.getInstanceConfig().n_depots, InstData.getInstanceConfig().time_periods];
             customer_depot_designation = new GRBVar[InstData.getInstanceConfig().n_nodes, InstData.getInstanceConfig().n_depots, InstData.getInstanceConfig().time_periods];
+            group_is_serviced = new GRBVar[InstData.getInstanceConfig().number_of_priority_groups, InstData.getInstanceConfig().time_periods];
         }
 
         private void create_depot_usage_vars()
@@ -55,10 +51,21 @@ namespace PMedians
             }
             return;
         }
+        private void create_group_is_serviced_vars()
+        {
+            for (int prior = 0; prior < InstData.getInstanceGeneratorConfig().number_of_priority_groups; prior++)
+            {
+                for (int t = 0; t < InstData.getInstanceGeneratorConfig().time_periods; t++)
+                {
+                    this.group_is_serviced[prior, t] = Model.AddVar(0.00, 1.00, 1.00, GRB.BINARY, String.Format($"G_g{prior}_{t}", prior));
+                }
+            }
+        }
         public void make_all_vars()
         {
             this.create_depot_usage_vars();
             this.create_depot_customer_designation_vars();
+            this.create_group_is_serviced_vars();
         }
     }
 
@@ -66,9 +73,9 @@ namespace PMedians
     {
         private GRBModel Model;
         private readonly VariableGenerator variableGenerator;
-        private readonly InstanceGenerator.InstanceGeneratorMain instanceGenerator;
+        private readonly InstanceGeneratorMain instanceGenerator;
 
-        public ConstraintGenerator(GRBModel pModel, VariableGenerator pvariableGenerator, InstanceGenerator.InstanceGeneratorMain pinstanceGenerator)
+        public ConstraintGenerator(GRBModel pModel, VariableGenerator pvariableGenerator, InstanceGeneratorMain pinstanceGenerator)
         {
             Model = pModel;
             variableGenerator = pvariableGenerator;
@@ -132,14 +139,74 @@ namespace PMedians
                 }
             }
         }
+        public void all_group_nodes_visited_in_period()
+        {
+            int num_prior = instanceGenerator.getInstanceConfig().number_of_priority_groups;
+            if (num_prior > 0)
+            {
+                for (int prior = 0; prior < instanceGenerator.getInstanceConfig().number_of_priority_groups; prior++)
+                {
+                    for (int t = 0; t < instanceGenerator.getInstanceConfig().time_periods; t++)
+                    {
+                        int count = instanceGenerator.customer_node.Where(x => x.group == (PriorityGroup)prior).Count();
+                        GRBLinExpr sum1 = 0;
+                        for (int taux = 0; taux <= t; taux++)
+                        {
+                            for (int i = 0; i < instanceGenerator.getInstanceConfig().n_nodes; i++)
+                            {
+                                if (instanceGenerator.customer_node[i].group == (PriorityGroup)prior)
+                                {
+                                    for (int j = 0; j < instanceGenerator.getInstanceConfig().n_depots; j++)
+                                    {
+                                        sum1 += variableGenerator.customer_depot_designation[i, j, taux];
+                                    }
+                                }
+                            }
+                        }
+                        Model.AddConstr(sum1 == variableGenerator.group_is_serviced[prior, t] * count, $"group_is_serviced_prior{prior}_{t}");
+                    }
+                }
+            }
+            else
+            {
+                return;
+            }
+        }
+        public void group_precedence()
+        {
+            int num_prior = instanceGenerator.getInstanceConfig().number_of_priority_groups;
+            if (num_prior > 0)
+            {
+                for (int i = 0; i < instanceGenerator.getInstanceConfig().n_nodes; i++)
+                {
+                    for (int prior = 1; prior < instanceGenerator.getInstanceConfig().number_of_priority_groups; prior++)
+                    {
+                        if (instanceGenerator.customer_node[i].group == (PriorityGroup)prior)
+                        {
+                            for (int t = 0; t < instanceGenerator.getInstanceConfig().time_periods; t++)
+                            {
+                                for (int j = 0; j < instanceGenerator.getInstanceConfig().n_depots; j++)
+                                {
+                                    Model.AddConstr(variableGenerator.customer_depot_designation[i, j, t] <= variableGenerator.group_is_serviced[prior - 1, t], "dadsdff"); // talvez tenha que incorporar o somatorio cumulativo aqui
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                return;
+            }
+        }
 
         public void make_all_constraints()
         {
             this.max_depot_nodes_per_period(instanceGenerator.getInstanceConfig().max_depot_nodes_per_period);
-            //this.max_nodes_per_depot(instanceGenerator.getInstanceConfig().max_nodes_per_depot);
             this.one_visit_per_node();
             this.service_only_by_active_depot();
-
+            this.all_group_nodes_visited_in_period();
+            this.group_precedence();
             this.setup_objective();
         }
 
@@ -174,7 +241,7 @@ namespace PMedians
         private ConstraintGenerator constraintGenerator;
         private string filename;
 
-        public PMedian(InstanceGenerator.InstanceGeneratorMain pInstance, string pfilename = "PMEDIAN")
+        public PMedian(InstanceGenerator.InstanceGeneratorMain pInstance, string pfilename = "PMEDIAN", string presults_filename = null)
             : base(new GRBEnv(pfilename + ".log"))
         {
             Instance = pInstance;
@@ -218,7 +285,7 @@ namespace PMedians
         private void IIS()
         {
             this.ComputeIIS();
-            this.Write(filename + "ilp");
+            this.Write(filename + ".ilp");
         }
 
         public void write_lp()
@@ -241,6 +308,26 @@ namespace PMedians
         {
             SolutionDrawing solutionDrawing = new SolutionDrawing(instanceDrawing, this);
             solutionDrawing.draw(filename_template);
+        }
+
+        public void write_results_to_file(string results_filename)
+        {
+            if (File.Exists(results_filename))
+            {
+                using (StreamWriter BufferedStream = File.AppendText(results_filename))
+                {
+                    BufferedStream.WriteLine($"{this.ObjVal},{this.ObjBound},{this.MIPGap},{this.Runtime},{this.NodeCount},{this.NumVars},{this.NumConstrs}");
+                    BufferedStream.Close();
+                }
+            }
+            else
+            {
+                using (StreamWriter BufferedStream = new StreamWriter(results_filename))
+                {
+                    BufferedStream.Write($"{this.ObjVal},{this.ObjBound},{this.MIPGap},{this.Runtime},{this.NodeCount},{this.NumVars},{this.NumConstrs}\n");
+                    BufferedStream.Close();
+                }
+            }
         }
     }
 
@@ -302,6 +389,7 @@ namespace PMedians
                         if (pMedian.getVariableGenerator().customer_depot_designation[i, j, t].X > 0.5)
                         {
                             this.graphics[t].DrawLine(this.pen, new Point(pMedian.getInstanceGenerator().customer_node[i].x, pMedian.getInstanceGenerator().customer_node[i].y), dnode_point);
+                            this.graphics[t].DrawString(pMedian.getInstanceGenerator().customer_node[i].group.ToString()[0].ToString(), new Font(FontFamily.GenericSansSerif, 10), new SolidBrush((Color)ColorProgression.getColor(pMedian.getInstanceGenerator().customer_node[i].group)), pMedian.getInstanceGenerator().customer_node[i].x, pMedian.getInstanceGenerator().customer_node[i].y);
                         }
                     }
                 }
@@ -338,6 +426,7 @@ namespace PMedians
         private static InstanceGeneratorConfig instanceGeneratorConfig;
         private static string drawing_path;
         private static double model_runtime = Double.MaxValue;
+        public static string results_filename { private set; get; }
 
         public static InstanceGeneratorConfig getInstanceGeneratorConfig()
         {
@@ -446,6 +535,19 @@ namespace PMedians
                         }
                         break;
 
+                    case "-o":
+                    case "-output":
+                        if (is_config_set)
+                        {
+                            results_filename = args[++curr_pos];
+                            ++curr_pos;
+                        }
+                        else
+                        {
+                            end(1, "Error when parsing optional arguments: no instance configuration detected. Please refer to the usage instructions (-help)."); // all this repetition is atrocious
+                        }
+                        break;
+
                     default:
                         return;
                 }
@@ -486,9 +588,9 @@ namespace PMedians
                     }
                 }
 
-                if (values.Count != 10)
+                if (values.Count != 11)
                 {
-                    throw new Exception($"Number of detected parameters ({values.Count}) different than the expected value (10).");
+                    throw new Exception($"Number of detected parameters ({values.Count}) different than the expected value (11).");
                 }
 
                 Console.Write("Manual instance parameters input (-file) detected. Starting instance with:\n" +
@@ -499,9 +601,10 @@ namespace PMedians
         $"number of depots = {values[4]}\n" +
         $"number of customers = {values[5]}\n" +
         $"depot creation radius = {values[6]}\n" +
-        $"x dimension of the board (used for visual representation) = {values[7]}\n" +
-        $"y dimension of the board (used for visual representation) = {values[8]}\n");
-                Console.WriteLine($"RNG seed = {values[9]}");
+        $"number of priority groups = {values[7]}\n" +
+        $"x dimension of the board (used for visual representation) = {values[8]}\n" +
+        $"y dimension of the board (used for visual representation) = {values[9]}\n");
+                Console.WriteLine($"RNG seed = {values[10]}");
 
                 return new InstanceGeneratorConfig()
                 {
@@ -512,9 +615,10 @@ namespace PMedians
                     n_depots = Convert.ToInt32(values[4]),
                     n_nodes = Convert.ToInt32(values[5]),
                     depot_creation_radius = Convert.ToInt32(values[6]),
-                    x_dim = Convert.ToInt32(values[7]),
-                    y_dim = Convert.ToInt32(values[8]),
-                    RNG = new Random(Convert.ToInt32(values[9]))
+                    number_of_priority_groups = Convert.ToInt32(values[7]),
+                    x_dim = Convert.ToInt32(values[8]),
+                    y_dim = Convert.ToInt32(values[9]),
+                    RNG = new Random(Convert.ToInt32(values[10]))
                 };
             }
             catch (Exception e)
@@ -544,9 +648,9 @@ namespace PMedians
                     }
                 }
                 --curr_pos;
-                if (values.Count != 9)
+                if (values.Count != 10)
                 {
-                    end(1, String.Format("Error when parsing values: 9 values expected, only {0} detected.", values.Count));
+                    end(1, String.Format("Error when parsing values: 10 values expected, only {0} detected.", values.Count));
                 }
 
                 Console.Write("Manual instance parameters input (-val) detected. Starting instance with:\n" +
@@ -557,8 +661,9 @@ namespace PMedians
                     $"number of depots = {values[4]}\n" +
                     $"number of customers = {values[5]}\n" +
                     $"depot creation radius = {values[6]}\n" +
-                    $"x dimension of the board (used for visual representation) = {values[7]}\n" +
-                    $"y dimension of the board (used for visual representation) = {values[8]}\n");
+                    $"number of priority groups = {values[7]}\n" +
+                    $"x dimension of the board (used for visual representation) = {values[8]}\n" +
+                    $"y dimension of the board (used for visual representation) = {values[9]}\n");
                 Console.WriteLine("RNG seed = 1000");
 
                 return new InstanceGeneratorConfig()
@@ -570,8 +675,9 @@ namespace PMedians
                     n_depots = Convert.ToInt32(values[4]),
                     n_nodes = Convert.ToInt32(values[5]),
                     depot_creation_radius = Convert.ToInt32(values[6]),
-                    x_dim = Convert.ToInt32(values[7]),
-                    y_dim = Convert.ToInt32(values[8]),
+                    number_of_priority_groups = Convert.ToInt32(values[7]),
+                    x_dim = Convert.ToInt32(values[8]),
+                    y_dim = Convert.ToInt32(values[9]),
                     RNG = new Random(1000)
                 };
             }
@@ -593,6 +699,7 @@ namespace PMedians
     $"number of depots = {CONSTANTS.N_DEPOTS}\n" +
     $"number of customers = {CONSTANTS.N_NODES}\n" +
     $"depot creation radius = {CONSTANTS.DEPOT_CREATION_RADIUS}\n" +
+    $"number of priority groups = {CONSTANTS.NUMBER_OF_PRIORITY_GROUPS}\n" +
     $"x dimension of the board (used for visual representation) = {CONSTANTS.X_DIM}\n" +
     $"y dimension of the board (used for visual representation) = {CONSTANTS.Y_DIM}\n");
             Console.WriteLine($"RNG seed = {CONSTANTS.RNG_SEED}");
@@ -653,7 +760,7 @@ namespace PMedians
         private static void help()
         {
             Console.Write("Example usage: ./PMedians [-f <arg> | -val <...args> | -dflt | -?] [-rng <arg>] [-draw <arg>]\n" +
-                "-file (-f)\t Path to the .txt instance file. File must have exactly 9 parameters disposed in individual lines.\n" +
+                "-file (-f)\t Path to the .txt instance file. File must have exactly 10 parameters disposed in individual lines.\n" +
                 "-values (-val)\t 10 values corresponding to the instance generation parameters:\n" +
                 "\n" +
                 "* time periods (int)\n" +
@@ -663,12 +770,14 @@ namespace PMedians
                 "* number of depots (int)\n" +
                 "* number of customers (int)\n" +
                 "* depot creation radius (int)\n" +
+                "* number of priority groups, from 0 to 3 (int)\n" +
                 "* x dimension of the board (used for visual representation) (int)\n" +
                 "* y dimension of the board (used for visual representation) (int)\n" +
                 "\n" +
                 "-default (-dflt)\t Uses default instance parameter values to create a sample instance\n" +
                 "-randomseed (-rng)\t Random Number Generator (RNG) seed (int). Default value = 1000\n" +
                 "-draw\t Name of the folder where instance/solution drawings will be put in" +
+                "-output (-o)\t Sets a destination file for the output of the model's solution. Prints UB, LB, gap, runtime, number of variables, and number of constraints" +
                 "- help (-h) (-?)\t Show program's usage message\n");
             end(0);
         }
@@ -686,7 +795,7 @@ namespace PMedians
         {
             try
             {
-                if (args.Length > 0)
+                if (args.Length > 1)
                 {
                     ArgParser.parse_args(args);
 
@@ -704,6 +813,11 @@ namespace PMedians
                         InstanceDrawing instanceDrawing = new InstanceDrawing(instanceGenerator, new DrawingSettings());
                         instanceDrawing.draw(ArgParser.getDrawingPath() + "instance");
                         pMedianProblem.draw_solution(instanceDrawing, ArgParser.getDrawingPath() + "solution");
+                    }
+
+                    if (ArgParser.results_filename != null)
+                    {
+                        pMedianProblem.write_results_to_file(ArgParser.results_filename);
                     }
 
                     return 0;

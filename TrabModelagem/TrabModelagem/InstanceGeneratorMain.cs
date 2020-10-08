@@ -1,12 +1,7 @@
 ﻿using System;
-using System.Diagnostics;
-using System.IO;
-using System.Drawing;
-using System.Dynamic;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
-using System.Windows.Forms.VisualStyles;
-using System.Windows.Forms;
+using System.Drawing;
+using System.IO;
 
 namespace InstanceGenerator
 {
@@ -14,25 +9,36 @@ namespace InstanceGenerator
     {
         public int x = 0;
         public int y = 0;
+        public PriorityGroup group = PriorityGroup.HIGH;
     }
 
     public class CONSTANTS
     {
-        public const int TIME_PERIODS = 3;
+        public const int TIME_PERIODS = 5;
         public const int MAX_DEPOTS_NODES_PER_PERIOD = 10;
-        public const int MAX_NODES_PER_DEPOT = 100;
+        public const int MAX_NODES_PER_DEPOT = 50;
         public const double DEPOT_USAGE_COST = 1000;
-        public const int N_DEPOTS = 10;
-        public const int N_NODES = 1000;
+        public const int N_DEPOTS = 5;
+        public const int DEPOT_CREATION_RADIUS = 100;
+        public const int N_NODES = 500;
+        public const int NUMBER_OF_PRIORITY_GROUPS = 3;
         public const int X_DIM = 1000;
         public const int Y_DIM = 1000;
-        public const int DEPOT_CREATION_RADIUS = 100;
         public const int RNG_SEED = 1000;
+    }
+
+    public enum PriorityGroup
+    {
+        HIGH,
+        MEDIUM,
+        LOW,
+        NONE
     }
 
     public class InstanceGeneratorConfig
     {
         public int time_periods { get; set; } = CONSTANTS.TIME_PERIODS;
+        public int number_of_priority_groups { get; set; } = CONSTANTS.NUMBER_OF_PRIORITY_GROUPS;
         public int max_depot_nodes_per_period { get; set; } = CONSTANTS.MAX_DEPOTS_NODES_PER_PERIOD;
         public int max_nodes_per_depot { get; set; } = CONSTANTS.MAX_NODES_PER_DEPOT;
         public double depot_usage_cost { get; set; } = CONSTANTS.DEPOT_USAGE_COST;
@@ -42,6 +48,19 @@ namespace InstanceGenerator
         public int y_dim { get; set; } = CONSTANTS.Y_DIM;
         public int depot_creation_radius { get; set; } = CONSTANTS.DEPOT_CREATION_RADIUS;
         public Random RNG { get; set; } = new Random(CONSTANTS.RNG_SEED);
+
+        public PriorityGroup getPriorityGroup(int number_of_groups)
+        {
+            if (number_of_groups <= 1)
+            {
+                return PriorityGroup.HIGH;
+            }
+            else
+            {
+                int dummy = number_of_groups > 3 ? RNG.Next(number_of_groups + 1) : RNG.Next(3);
+                return (PriorityGroup)dummy;
+            }
+        }
     }
 
     public class InstanceGeneratorMain
@@ -62,6 +81,11 @@ namespace InstanceGenerator
         public InstanceGeneratorMain(InstanceGeneratorConfig pinstanceGeneratorConfig)
         {
             instanceGeneratorConfig = pinstanceGeneratorConfig;
+        }
+
+        public InstanceGeneratorConfig getInstanceGeneratorConfig()
+        {
+            return instanceGeneratorConfig;
         }
 
         private void initialize()
@@ -100,10 +124,9 @@ namespace InstanceGenerator
         {
             for (int i = 0; i < instanceGeneratorConfig.n_depots; i++)
             {
-                int x = instanceGeneratorConfig.RNG.Next(0, instanceGeneratorConfig.x_dim - instanceGeneratorConfig.depot_creation_radius + 1);
-                int y = instanceGeneratorConfig.RNG.Next(0, instanceGeneratorConfig.y_dim - instanceGeneratorConfig.depot_creation_radius + 1);
-                depot_node[i].x = x;
-                depot_node[i].y = y;
+                depot_node[i].x = instanceGeneratorConfig.RNG.Next(0, instanceGeneratorConfig.x_dim - instanceGeneratorConfig.depot_creation_radius + 1);
+                depot_node[i].y = instanceGeneratorConfig.RNG.Next(0, instanceGeneratorConfig.y_dim - instanceGeneratorConfig.depot_creation_radius + 1);
+                depot_node[i].group = PriorityGroup.NONE;
             }
         }
 
@@ -111,10 +134,9 @@ namespace InstanceGenerator
         {
             for (int i = 0; i < instanceGeneratorConfig.n_nodes; i++)
             {
-                int x = instanceGeneratorConfig.RNG.Next(0, instanceGeneratorConfig.x_dim + 1);
-                int y = instanceGeneratorConfig.RNG.Next(0, instanceGeneratorConfig.y_dim + 1);
-                customer_node[i].x = x;
-                customer_node[i].y = y;
+                customer_node[i].x = instanceGeneratorConfig.RNG.Next(0, instanceGeneratorConfig.x_dim + 1);
+                customer_node[i].y = instanceGeneratorConfig.RNG.Next(0, instanceGeneratorConfig.y_dim + 1);
+                customer_node[i].group = instanceGeneratorConfig.getPriorityGroup(instanceGeneratorConfig.number_of_priority_groups);
             }
         }
 
@@ -124,7 +146,7 @@ namespace InstanceGenerator
             {
                 for (int j = 0; j < instanceGeneratorConfig.n_depots; j++)
                 {
-                    double cost = Math.Sqrt(Math.Pow((customer_node[i].x - depot_node[j].x), 2) + Math.Pow((customer_node[i].y - depot_node[j].y),2 ));
+                    double cost = Math.Sqrt(Math.Pow((customer_node[i].x - depot_node[j].x), 2) + Math.Pow((customer_node[i].y - depot_node[j].y), 2));
                     customer_depot_assignment_cost[i, j] = cost;
                 }
             }
@@ -143,7 +165,7 @@ namespace InstanceGenerator
             // to be implemented
         }
 
-        public void create_instance(String filename="")
+        public void create_instance(String filename = "")
         {
             initialize();
             create_data();
@@ -186,6 +208,21 @@ namespace InstanceGenerator
         {
             return CurrentColor[object_type];
         }
+        public static Color? getColor(PriorityGroup group)
+        {
+            switch(group)
+            {
+                case PriorityGroup.HIGH:
+                    return Color.Red;
+                case PriorityGroup.MEDIUM:
+                    return Color.Orange;
+                case PriorityGroup.LOW:
+                    return Color.Yellow;
+                case PriorityGroup.NONE:
+                    return Color.Black;
+            }
+            return null;
+        }
     }
 
     public class DrawingSettings
@@ -196,11 +233,23 @@ namespace InstanceGenerator
 
     public class InstanceDrawing
     {
+        private class RectangleDrawing
+        {
+            public RectangleDrawing(Rectangle p_rectangle, PriorityGroup p_group)
+            {
+                Rectangle = p_rectangle;
+                PriorityGroup = p_group;
+            }
+
+            public Rectangle Rectangle;
+            public PriorityGroup PriorityGroup;
+        }
+
         private readonly InstanceGeneratorMain instanceGenerator;
         private readonly DrawingSettings drawingSettings;
 
-        private Rectangle[] depot;
-        private Rectangle[] node;
+        private RectangleDrawing[] depot;
+        private RectangleDrawing[] node;
         private Image image;
         private Graphics graphics;
         private Brush brush;
@@ -240,15 +289,15 @@ namespace InstanceGenerator
 
         private void initialize_node_drawings()
         {
-            depot = new Rectangle[instanceGenerator.getInstanceConfig().n_depots];
+            depot = new RectangleDrawing[instanceGenerator.getInstanceConfig().n_depots];
             for (int i = 0; i < instanceGenerator.getInstanceConfig().n_depots; i++)
             {
-                depot[i] = new Rectangle(instanceGenerator.depot_node[i].x - drawingSettings.point_radius / 2, instanceGenerator.depot_node[i].y - drawingSettings.point_radius / 2, drawingSettings.point_radius, drawingSettings.point_radius);
+                depot[i] = new RectangleDrawing(new Rectangle(instanceGenerator.depot_node[i].x - drawingSettings.point_radius / 2, instanceGenerator.depot_node[i].y - drawingSettings.point_radius / 2, drawingSettings.point_radius, drawingSettings.point_radius), PriorityGroup.HIGH);
             }
-            node = new Rectangle[instanceGenerator.getInstanceConfig().n_nodes];
+            node = new RectangleDrawing[instanceGenerator.getInstanceConfig().n_nodes];
             for (int i = 0; i < instanceGenerator.getInstanceConfig().n_nodes; i++)
             {
-                node[i] = new Rectangle(instanceGenerator.customer_node[i].x, instanceGenerator.customer_node[i].y, drawingSettings.point_radius, drawingSettings.point_radius);
+                node[i] = new RectangleDrawing(new Rectangle(instanceGenerator.customer_node[i].x, instanceGenerator.customer_node[i].y, drawingSettings.point_radius, drawingSettings.point_radius), instanceGenerator.customer_node[i].group);
             }
         }
 
@@ -262,17 +311,16 @@ namespace InstanceGenerator
         {
             foreach (var dnode in depot)
             {
-                this.graphics.FillRectangle(brush, dnode);
+                this.graphics.FillRectangle(brush, dnode.Rectangle);
             }
-            this.brush = new SolidBrush(ColorProgression.getColor(OBJECT_COLOR.CUSTOMER_NODE));
             foreach (var nnode in node)
             {
-                this.graphics.FillRectangle(brush, nnode);
+                this.graphics.FillRectangle(new SolidBrush((Color)ColorProgression.getColor(nnode.PriorityGroup)), nnode.Rectangle);
             }
         }
     }
 
-     class main
+    class main
     {
         static void Main(string[] args)
         {
@@ -280,7 +328,7 @@ namespace InstanceGenerator
             InstanceGeneratorMain IG = new InstanceGeneratorMain(instanceGeneratorConfig);
             IG.create_instance();
             InstanceDrawing instanceDrawing = new InstanceDrawing(IG, new DrawingSettings());
-            instanceDrawing.draw("instance");
+            instanceDrawing.draw("instance.bmp");
             return;
         }
     }
